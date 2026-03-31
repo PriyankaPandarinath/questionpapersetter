@@ -39,7 +39,6 @@ const QuestionInputForm: React.FC<QuestionInputFormProps> = ({
     const [selectedImportIds, setSelectedImportIds] = useState<number[]>([]);
 
     const handleDetailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.name === 'collegeName') return;
         setDetails({ ...details, [e.target.name]: e.target.value });
     };
 
@@ -148,9 +147,7 @@ const QuestionInputForm: React.FC<QuestionInputFormProps> = ({
                                     name={key}
                                     value={details[key as keyof ExamDetails]}
                                     onChange={handleDetailChange}
-                                    style={{ ...INPUT_STYLE, marginTop: 6, opacity: key === 'collegeName' ? 0.6 : 1, cursor: key === 'collegeName' ? 'not-allowed' : 'text' }}
-                                    readOnly={key === 'collegeName'}
-                                    disabled={key === 'collegeName'}
+                                    style={{ ...INPUT_STYLE, marginTop: 6 }}
                                 />
                             </div>
                         ))}
@@ -298,7 +295,7 @@ const QuestionInputForm: React.FC<QuestionInputFormProps> = ({
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                     {(() => {
                                         const questions = (questionBank[importSubject][importType! + 's' as keyof import('../types').SubjectData] ||
-                                            questionBank[importSubject][importType as keyof import('../types').SubjectData]) as import('../types').Question[];
+                                            questionBank[importSubject][importType as keyof import('../types').SubjectData]) as Question[];
                                         if (!questions || questions.length === 0)
                                             return <p style={{ color: 'rgba(255,255,255,0.3)', textAlign: 'center' }}>No questions found.</p>;
                                         return questions.map((q: Question) => (
@@ -325,9 +322,39 @@ const QuestionInputForm: React.FC<QuestionInputFormProps> = ({
                                     const subjectData = questionBank[importSubject];
                                     const src = (subjectData[importType === 'partB' ? 'partB' : (importType + 's' as keyof typeof subjectData)]) as Question[];
                                     const sel = src.filter((q: Question) => selectedImportIds.includes(q.id));
-                                    if (importType === 'mcq') { const n = [...mcqs]; sel.forEach((q: Question, i: number) => { if (i < n.length) n[i] = { ...n[i], text: q.text, options: [...(q.options || [])] }; }); setMcqs(n); }
-                                    else if (importType === 'fib') { const n = [...fibs]; sel.forEach((q: Question, i: number) => { if (i < n.length) n[i] = { ...n[i], text: q.text }; }); setFibs(n); }
-                                    else if (importType === 'partB') { const n = [...partB]; sel.forEach((q: Question, i: number) => { if (i < n.length) n[i] = { ...n[i], text: q.text, bloomLevel: q.bloomLevel, marks: q.marks }; }); setPartB(n); }
+                                    if (importType === 'mcq') { 
+                                        setMcqs(prev => {
+                                            const n = [...prev];
+                                            sel.forEach((q: Question) => {
+                                                const emptyIdx = n.findIndex(mq => !mq.text);
+                                                if (emptyIdx !== -1) n[emptyIdx] = { ...n[emptyIdx], text: q.text, options: [...(q.options || [])] };
+                                                else n.push({ ...q, id: n.length + 1 });
+                                            });
+                                            return n;
+                                        });
+                                    }
+                                    else if (importType === 'fib') {
+                                        setFibs(prev => {
+                                            const n = [...prev];
+                                            sel.forEach((q: Question) => {
+                                                const emptyIdx = n.findIndex(fq => !fq.text);
+                                                if (emptyIdx !== -1) n[emptyIdx] = { ...n[emptyIdx], text: q.text };
+                                                else n.push({ ...q, id: n.length + 1 });
+                                            });
+                                            return n;
+                                        });
+                                    }
+                                    else if (importType === 'partB') {
+                                        setPartB(prev => {
+                                            const n = [...prev];
+                                            sel.forEach((q: Question) => {
+                                                const emptyIdx = n.findIndex(pq => !pq.text);
+                                                if (emptyIdx !== -1) n[emptyIdx] = { ...n[emptyIdx], text: q.text, bloomLevel: q.bloomLevel, marks: q.marks };
+                                                else n.push({ ...q, id: n.length + 1 });
+                                            });
+                                            return n;
+                                        });
+                                    }
                                     setShowImportModal(false);
                                 }}
                                 disabled={selectedImportIds.length === 0}
