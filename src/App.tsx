@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import QuestionInputForm from './components/QuestionInputForm';
 import QuestionPaper from './components/QuestionPaper';
 import QuestionBankView from './components/QuestionBankView';
 import LoginPage from './components/LoginPage';
 import ChatBot from './components/ChatBot';
 import AdminDashboard from './components/AdminDashboard';
+import HomeView from './components/HomeView';
 
 import { generateSets } from './components/SetGenerator';
 import { generateWordDocument, generatePDF, generateAllWordDocuments, generateAllPDFs } from './utils/documentGenerator';
@@ -154,12 +156,18 @@ function WhatsAppModal({ message, onClose }: { message: string; onClose: () => v
   );
 }
 
+function ProtectedRoute({ children, isAuthenticated, isAdminRequired = false, isAdmin = false }: { children: React.ReactNode, isAuthenticated: boolean, isAdminRequired?: boolean, isAdmin?: boolean }) {
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (isAdminRequired && !isAdmin) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const navigate = useNavigate();
+  const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem('isAuth') === 'true');
+  const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('isAdmin') === 'true');
   const [sets, setSets] = useState<QuestionPaperSet[]>([]);
   const [activeSetIndex, setActiveSetIndex] = useState(0);
-  const [view, setView] = useState<'input' | 'preview' | 'history' | 'bank' | 'admin'>('input');
 
   const [showWAModal, setShowWAModal] = useState(false);
   const [waMessage, setWaMessage] = useState('');
@@ -167,7 +175,7 @@ function App() {
 
   const [history, setHistory] = useState<SavedPaper[]>(() => {
     const saved = localStorage.getItem('paperHistory');
-    const parsed = saved ? JSON.parse(saved) : [];
+    const parsed = saved ? JSON.parse(saved) as SavedPaper[] : [];
     if (parsed.length === 0) {
       return [{
         id: 'sample-paper-001',
@@ -195,22 +203,22 @@ function App() {
 
   const [questionBank, setQuestionBank] = useState<QuestionBank>(() => {
     const saved = localStorage.getItem('questionBank');
-    return saved ? JSON.parse(saved) : {};
+    return saved ? JSON.parse(saved) as QuestionBank : {};
   });
 
   const [details, setDetails] = useState<ExamDetails>(() => {
     const saved = localStorage.getItem('formDetails');
-    const d = saved ? JSON.parse(saved) : {
-      collegeName: "NALLA NARASIMHA REDDY EDUCATION SOCIETY'S GROUP OF INSTITUTIONS",
-      examName: 'II B.TECH II SEMESTER – I MID TERM EXAMINATION –FEB-2026',
-      subject: 'Database Management Systems',
-      subjectCode: '22CS404PC',
-      branch: 'COMMON TO (CSE, CSD, CSM & IT)',
-      date: '20-02-2026 (A.N)',
-      time: '2 Hours (1:30PM TO 3:30PM)',
-      maxMarks: 30,
+    const d = saved ? JSON.parse(saved) as ExamDetails : {
+      collegeName: "TECH UNIVERSITY OF EXCELLENCE",
+      examName: 'B.TECH II YEAR I SEMESTER – SAMPLE EXAMINATION',
+      subject: 'Sample: Computer Networks',
+      subjectCode: 'CS301',
+      branch: 'CSE',
+      date: '2026-03-24',
+      time: '3 Hours',
+      maxMarks: 100,
     };
-    return { ...d, collegeName: "NALLA NARASIMHA REDDY EDUCATION SOCIETY'S GROUP OF INSTITUTIONS" };
+    return d;
   });
 
   const [mcqs, setMcqs] = useState<Question[]>(() => {
@@ -241,20 +249,26 @@ function App() {
   const handleLogin = (username: string) => {
     setIsAuthenticated(true);
     setCurrentUser(username);
-    setIsAdmin(username.toLowerCase() === 'admin');
+    const admin = username.toLowerCase() === 'admin';
+    setIsAdmin(admin);
+    localStorage.setItem('isAuth', 'true');
+    localStorage.setItem('isAdmin', admin.toString());
+    navigate('/');
   };
   const handleLogout = () => {
     setIsAuthenticated(false);
     setCurrentUser('');
     setIsAdmin(false);
-    setView('input');
+    localStorage.removeItem('isAuth');
+    localStorage.removeItem('isAdmin');
+    navigate('/login');
   };
 
   const handleGenerate = () => {
     const generatedSets = generateSets(mcqs, fibs, partB);
     setSets(generatedSets);
     setActiveSetIndex(0);
-    setView('preview');
+    navigate('/preview');
     const newPaper: SavedPaper = {
       id: Date.now().toString(),
       date: new Date().toLocaleString(),
@@ -271,7 +285,7 @@ function App() {
     setFibs(paper.fibs);
     setPartB(paper.partB);
     setActiveSetIndex(0);
-    setView('preview');
+    navigate('/preview');
   };
 
   const handleDeletePaper = (id: string, e: React.MouseEvent) => {
@@ -306,253 +320,175 @@ function App() {
   };
 
 
-  // ── shared chatbot ──
-  const renderPanels = () => {
-    return (
-      <>
-        <ChatBot />
-      </>
-    );
-  };
-
-  if (!isAuthenticated) return <LoginPage onLogin={handleLogin} />;
-
-  // ── BANK VIEW ──────────────────────────────────────────────────────────────
-  if (view === 'bank') {
-    return (
-      <>
-        <QuestionBankView questionBank={questionBank} setQuestionBank={setQuestionBank} onBack={() => setView('input')} />
-        <PageFooter />
-        {renderPanels()}
-      </>
-    );
-  }
-
-  // ── ADMIN VIEW ─────────────────────────────────────────────────────────────
-  if (view === 'admin' && isAdmin) {
-    return (
-      <>
-        <AdminDashboard onBack={() => setView('input')} />
-        <PageFooter />
-        {renderPanels()}
-      </>
-    );
-  }
-
-  // ── INPUT VIEW ─────────────────────────────────────────────────────────────
-  if (view === 'input') {
-    return (
-      <>
-        <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #0f172a 100%)' }}>
-          <NavBar
-            left={
-              <>
-                <span style={{ color: '#a5b4fc', fontWeight: 800, fontSize: 16, marginRight: 8 }}>📝 Paper Setter</span>
-                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, alignSelf: 'center', marginLeft: 8, paddingLeft: 12, borderLeft: '1px solid rgba(255,255,255,0.2)' }}>
-                  Welcome, <strong style={{ color: '#fff' }}>{currentUser}</strong>
-                </span>
-              </>
-            }
-            right={
-              <>
-
-                {isAdmin && <button style={btn('rgba(16,185,129,0.85)')} onClick={() => setView('admin')}>Admin Panel</button>}
-                <button style={btn('rgba(99,102,241,0.85)')} onClick={() => setView('bank')}>Question Bank</button>
-                <button style={btn('rgba(124,58,237,0.85)')} onClick={() => setView('history')}>Previous Papers</button>
-                <button style={btn('rgba(239,68,68,0.7)')} onClick={handleLogout}>Logout</button>
-              </>
-            }
-          />
-          <QuestionInputForm
-            details={details} setDetails={setDetails}
-            mcqs={mcqs} setMcqs={setMcqs}
-            fibs={fibs} setFibs={setFibs}
-            partB={partB} setPartB={setPartB}
-            onSubmit={handleGenerate}
-            questionBank={questionBank}
-          />
-          <PageFooter />
-        </div>
-        {renderPanels()}
-      </>
-    );
-  }
-
-  // ── HISTORY VIEW ───────────────────────────────────────────────────────────
-  if (view === 'history') {
-    return (
-      <>
-        <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #0f172a 100%)' }}>
-          <NavBar
-            left={<span style={{ color: '#a5b4fc', fontWeight: 800, fontSize: 16 }}>📂 Previous Papers</span>}
-            right={
-              <>
-
-                <button style={btn('rgba(107,114,128,0.7)')} onClick={() => setView('input')}>Back to Edit</button>
-                <button style={btn('rgba(59,130,246,0.7)')} onClick={() => setView('preview')} disabled={sets.length === 0}>
-                  Back to Preview
-                </button>
-              </>
-            }
-          />
-
-          <div style={{ padding: '36px 32px' }}>
-            {(() => {
-              const filteredHistory = history.filter(paper =>
-                isAdmin || paper.isSample || paper.createdBy === currentUser
-              );
-
-              if (filteredHistory.length === 0) {
-                return (
-                  <div style={{ color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 80, fontSize: 16 }}>
-                    📄 No saved papers available for you yet.
-                  </div>
-                );
-              }
-
-              return (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
-                  {filteredHistory.map(paper => (
-                    <div
-                      key={paper.id}
-                      onClick={() => handleLoadPaper(paper)}
-                      style={{
-                        background: 'rgba(255,255,255,0.05)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: 16, padding: '22px 24px',
-                        cursor: 'pointer', transition: 'all 0.18s',
-                      }}
-                      onMouseEnter={e => {
-                        (e.currentTarget as HTMLDivElement).style.background = 'rgba(99,102,241,0.15)';
-                        (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(99,102,241,0.4)';
-                        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
-                      }}
-                      onMouseLeave={e => {
-                        (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.05)';
-                        (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.1)';
-                        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-                        <div>
-                          <div style={{ color: '#e0e7ff', fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{paper.details.subject}</div>
-                          <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12 }}>{paper.details.examName}</div>
-                          <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, marginTop: 4 }}>🕐 {paper.date}</div>
-                        </div>
-                        {paper.isSample ? (
-                          <div style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.4)', color: '#6ee7b7', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700 }}>
-                            SAMPLE
-                          </div>
-                        ) : (
-                          <button
-                            onClick={e => handleDeletePaper(paper.id, e)}
-                            style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', borderRadius: 8, padding: '4px 8px', cursor: 'pointer', fontSize: 12 }}
-                            title="Delete"
-                          >
-                            🗑
-                          </button>
-                        )}
-                      </div>
-                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 16 }}>
-                        <span>Branch: {paper.details.branch}</span> &nbsp;·&nbsp; <span>Sets: {paper.sets.length}</span>
-                        {isAdmin && paper.createdBy && (
-                          <div style={{ marginTop: 4, color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>
-                            Created by: {paper.createdBy} {paper.isSample ? '(System)' : ''}
-                          </div>
-                        )}
-                      </div>
-                      <div style={{
-                        padding: '8px 12px', borderRadius: 8, textAlign: 'center',
-                        background: 'rgba(99,102,241,0.2)', color: '#a5b4fc',
-                        fontSize: 12, fontWeight: 700,
-                      }}>
-                        Load & Preview →
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-          </div>
-          <PageFooter />
-        </div>
-        {renderPanels()}
-      </>
-    );
-  }
-
-  // ── PREVIEW VIEW ───────────────────────────────────────────────────────────
   return (
     <>
-      <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
-        {/* Fixed top control bar */}
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10,
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '10px 24px',
-          background: 'linear-gradient(90deg, #1e1b4b, #312e81)',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.4)',
-        }} className="print:hidden">
-          {/* Left */}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button style={btn('rgba(107,114,128,0.7)')} onClick={() => setView('input')}>← Back to Edit</button>
-            <button style={btn('rgba(124,58,237,0.7)')} onClick={() => setView('history')}>Previous Papers</button>
-            {/* Set tabs */}
-            <div style={{ display: 'flex', gap: 6, marginLeft: 8 }}>
-              {sets.map((set, index) => (
-                <button
-                  key={set.setName}
-                  onClick={() => setActiveSetIndex(index)}
-                  style={{
-                    padding: '6px 14px', borderRadius: 8, border: 'none',
-                    background: activeSetIndex === index
-                      ? 'linear-gradient(90deg, #4338ca, #7c3aed)'
-                      : 'rgba(255,255,255,0.1)',
-                    color: activeSetIndex === index ? '#fff' : 'rgba(255,255,255,0.55)',
-                    fontWeight: 700, cursor: 'pointer', fontSize: 13,
-                  }}
-                >
-                  {set.setName}
-                </button>
-              ))}
+      <Routes>
+        <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
+
+        {/* Home View */}
+        <Route path="/" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #0f172a 100%)' }}>
+              <NavBar
+                left={
+                  <>
+                    <span onClick={() => navigate('/')} style={{ color: '#a5b4fc', fontWeight: 800, fontSize: 16, marginRight: 8, cursor: 'pointer' }}>📝 Paper Setter</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, alignSelf: 'center', marginLeft: 8, paddingLeft: 12, borderLeft: '1px solid rgba(255,255,255,0.2)' }}>
+                      Welcome, <strong style={{ color: '#fff' }}>{currentUser}</strong>
+                    </span>
+                  </>
+                }
+                right={
+                  <button style={btn('rgba(239,68,68,0.7)')} onClick={handleLogout}>Logout</button>
+                }
+              />
+              <HomeView currentUser={currentUser} isAdmin={isAdmin} />
+              <PageFooter />
             </div>
-          </div>
-          {/* Right */}
-          <div style={{ display: 'flex', gap: 8 }}>
+          </ProtectedRoute>
+        } />
 
-            <button style={btn('rgba(37,99,235,0.8)')} onClick={handleDownloadWord}>Word</button>
-            <button style={btn('rgba(29,78,216,0.8)')} onClick={handleDownloadAllWord}>All Word</button>
-            <button style={btn('rgba(220,38,38,0.8)')} onClick={handleDownloadPDF}>PDF</button>
-            <button style={btn('rgba(185,28,28,0.8)')} onClick={handleDownloadAllPDF}>All PDF</button>
-            <button
-              onClick={handleShareWhatsApp}
-              style={{ ...NAV_BTN, background: 'linear-gradient(90deg, #16a34a, #25d366)', display: 'flex', alignItems: 'center', gap: 6 }}
-              title="Share via WhatsApp"
-            >
-              <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 16, height: 16 }}><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" /><path d="M12 0C5.373 0 0 5.373 0 12c0 2.1.546 4.07 1.5 5.786L0 24l6.381-1.474A11.94 11.94 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.6a9.576 9.576 0 01-4.885-1.34l-.35-.208-3.63.838.872-3.543-.228-.364A9.538 9.538 0 012.4 12c0-5.295 4.305-9.6 9.6-9.6 5.295 0 9.6 4.305 9.6 9.6 0 5.295-4.305 9.6-9.6 9.6z" /></svg>
-              WhatsApp
-            </button>
-            <button style={btn('rgba(22,163,74,0.8)')} onClick={() => window.print()}>Print</button>
-            <button style={btn('rgba(239,68,68,0.7)')} onClick={handleLogout}>Logout</button>
-          </div>
-        </div>
+        {/* Generator View */}
+        <Route path="/generator" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #0f172a 100%)' }}>
+              <NavBar
+                left={
+                  <div onClick={() => navigate('/')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#a5b4fc', fontWeight: 800, fontSize: 16 }}>📝 Paper Setter</span>
+                    <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>/ Generator</span>
+                  </div>
+                }
+                right={
+                  <>
+                    <button style={btn('rgba(107,114,128,0.7)')} onClick={() => navigate('/')}>Home</button>
+                    <button style={btn('rgba(124,58,237,0.85)')} onClick={() => navigate('/history')}>Previous Papers</button>
+                    <button style={btn('rgba(239,68,68,0.7)')} onClick={handleLogout}>Logout</button>
+                  </>
+                }
+              />
+              <QuestionInputForm
+                details={details} setDetails={setDetails}
+                mcqs={mcqs} setMcqs={setMcqs}
+                fibs={fibs} setFibs={setFibs}
+                partB={partB} setPartB={setPartB}
+                onSubmit={handleGenerate}
+                questionBank={questionBank}
+              />
+              <PageFooter />
+            </div>
+          </ProtectedRoute>
+        } />
 
-        {/* Preview area — white/light for print fidelity */}
-        <div style={{ paddingTop: 72 }}>
-          {sets.length > 0 && <QuestionPaper details={details} set={sets[activeSetIndex]} />}
-        </div>
+        {/* Bank View */}
+        <Route path="/bank" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <QuestionBankView questionBank={questionBank} setQuestionBank={setQuestionBank} onBack={() => navigate('/')} />
+            <PageFooter />
+          </ProtectedRoute>
+        } />
 
-        {/* Hidden print-all area */}
-        <div className="fixed top-[100vh] left-0 pointer-events-none opacity-0">
-          {sets.map((set, index) => (
-            <QuestionPaper key={set.setName} details={details} set={set} id={`print-set-${index}`} />
-          ))}
-        </div>
-        <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #0f172a 100%)' }} className="print:hidden">
-          <PageFooter />
-        </div>
-      </div>
-      {renderPanels()}
+        {/* Admin View */}
+        <Route path="/admin" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} isAdminRequired isAdmin={isAdmin}>
+            <AdminDashboard onBack={() => navigate('/')} />
+            <PageFooter />
+          </ProtectedRoute>
+        } />
+
+        {/* History View */}
+        <Route path="/history" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #0f172a 100%)' }}>
+              <NavBar
+                left={<span style={{ color: '#a5b4fc', fontWeight: 800, fontSize: 16 }}>📂 Previous Papers</span>}
+                right={
+                  <>
+                    <button style={btn('rgba(107,114,128,0.7)')} onClick={() => navigate('/')}>Home</button>
+                    <button style={btn('rgba(59,130,246,0.7)')} onClick={() => navigate('/preview')} disabled={sets.length === 0}>
+                      Back to Preview
+                    </button>
+                  </>
+                }
+              />
+              <div style={{ padding: '36px 32px' }}>
+                {(() => {
+                  const filteredHistory = history.filter(paper => isAdmin || paper.isSample || paper.createdBy === currentUser);
+                  if (filteredHistory.length === 0) return <div style={{ color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 80, fontSize: 16 }}>📄 No saved papers available for you yet.</div>;
+                  return (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
+                      {filteredHistory.map(paper => (
+                        <div key={paper.id} onClick={() => handleLoadPaper(paper)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: '22px 24px', cursor: 'pointer', transition: 'all 0.18s' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+                            <div>
+                              <div style={{ color: '#e0e7ff', fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{paper.details.subject}</div>
+                              <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12 }}>{paper.details.examName}</div>
+                              <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, marginTop: 4 }}>🕐 {paper.date}</div>
+                            </div>
+                            {paper.isSample ? <div style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.4)', color: '#6ee7b7', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700 }}>SAMPLE</div> : <button onClick={e => handleDeletePaper(paper.id, e)} style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', borderRadius: 8, padding: '4px 8px', cursor: 'pointer', fontSize: 12 }} title="Delete">🗑</button>}
+                          </div>
+                          <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 16 }}>
+                            <span>Branch: {paper.details.branch}</span> &nbsp;·&nbsp; <span>Sets: {paper.sets.length}</span>
+                            {isAdmin && paper.createdBy && <div style={{ marginTop: 4, color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>Created by: {paper.createdBy} {paper.isSample ? '(System)' : ''}</div>}
+                          </div>
+                          <div style={{ padding: '8px 12px', borderRadius: 8, textAlign: 'center', background: 'rgba(99,102,241,0.2)', color: '#a5b4fc', fontSize: 12, fontWeight: 700 }}>Load & Preview →</div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+              <PageFooter />
+            </div>
+          </ProtectedRoute>
+        } />
+
+        {/* Preview View */}
+        <Route path="/preview" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
+              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 24px', background: 'linear-gradient(90deg, #1e1b4b, #312e81)', boxShadow: '0 2px 12px rgba(0,0,0,0.4)' }} className="print:hidden">
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button style={btn('rgba(107,114,128,0.7)')} onClick={() => navigate('/generator')}>← Back to Edit</button>
+                  <button style={btn('rgba(107,114,128,0.7)')} onClick={() => navigate('/')}>Home</button>
+                  <button style={btn('rgba(124,58,237,0.7)')} onClick={() => navigate('/history')}>Previous Papers</button>
+                  <div style={{ display: 'flex', gap: 6, marginLeft: 8 }}>
+                    {sets.map((set, index) => (
+                      <button key={set.setName} onClick={() => setActiveSetIndex(index)} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: activeSetIndex === index ? 'linear-gradient(90deg, #4338ca, #7c3aed)' : 'rgba(255,255,255,0.1)', color: activeSetIndex === index ? '#fff' : 'rgba(255,255,255,0.55)', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>{set.setName}</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button style={btn('rgba(37,99,235,0.8)')} onClick={handleDownloadWord}>Word</button>
+                  <button style={btn('rgba(29,78,216,0.8)')} onClick={handleDownloadAllWord}>All Word</button>
+                  <button style={btn('rgba(220,38,38,0.8)')} onClick={handleDownloadPDF}>PDF</button>
+                  <button style={btn('rgba(185,28,28,0.8)')} onClick={handleDownloadAllPDF}>All PDF</button>
+                  <button onClick={handleShareWhatsApp} style={{ ...NAV_BTN, background: 'linear-gradient(90deg, #16a34a, #25d366)', display: 'flex', alignItems: 'center', gap: 6 }} title="Share via WhatsApp">
+                    <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 16, height: 16 }}><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" /><path d="M12 0C5.373 0 0 5.373 0 12c0 2.1.546 4.07 1.5 5.786L0 24l6.381-1.474A11.94 11.94 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.6a9.576 9.576 0 01-4.885-1.34l-.35-.208-3.63.838.872-3.543-.228-.364A9.538 9.538 0 012.4 12c0-5.295 4.305-9.6 9.6-9.6 5.295 0 9.6 4.305 9.6 9.6 0 5.295-4.305 9.6-9.6 9.6z" /></svg>
+                    WhatsApp
+                  </button>
+                  <button style={btn('rgba(22,163,74,0.8)')} onClick={() => window.print()}>Print</button>
+                  <button style={btn('rgba(239,68,68,0.7)')} onClick={handleLogout}>Logout</button>
+                </div>
+              </div>
+              <div style={{ paddingTop: 72 }}>
+                {sets.length > 0 && <QuestionPaper details={details} set={sets[activeSetIndex]} />}
+              </div>
+              <div className="fixed top-[100vh] left-0 pointer-events-none opacity-0">
+                {sets.map((set, index) => (
+                  <QuestionPaper key={set.setName} details={details} set={set} id={`print-set-${index}`} />
+                ))}
+              </div>
+              <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #0f172a 100%)' }} className="print:hidden">
+                <PageFooter />
+              </div>
+            </div>
+          </ProtectedRoute>
+        } />
+      </Routes>
+
+      {/* Global Panels */}
+      <ChatBot />
       {showWAModal && <WhatsAppModal message={waMessage} onClose={() => setShowWAModal(false)} />}
     </>
   );

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface Message {
     id: number;
@@ -119,7 +119,7 @@ function getBotResponse(input: string): string {
 
 export default function ChatBot() {
     const [isOpen, setIsOpen] = useState(false);
-    const [messages, setMessages] = useState<Message[]>([
+    const [messages, setMessages] = useState<Message[]>(() => [
         {
             id: 1,
             text: "Hi! I'm your Question Paper Assistant 🎓 How can I help you today? Ask me anything about creating question papers, or tap a quick-reply below!",
@@ -139,11 +139,12 @@ export default function ChatBot() {
         }
     }, [isOpen, messages]);
 
-    const sendMessage = (text: string) => {
+    const sendMessage = useCallback((text: string) => {
         if (!text.trim()) return;
 
+        const msgId = Date.now();
         const userMsg: Message = {
-            id: Date.now(),
+            id: msgId,
             text: text.trim(),
             sender: 'user',
             timestamp: new Date(),
@@ -153,8 +154,9 @@ export default function ChatBot() {
         setIsTyping(true);
 
         setTimeout(() => {
+            const botMsgId = Date.now() + 1;
             const botMsg: Message = {
-                id: Date.now() + 1,
+                id: botMsgId,
                 text: getBotResponse(text),
                 sender: 'bot',
                 timestamp: new Date(),
@@ -162,7 +164,7 @@ export default function ChatBot() {
             setMessages(prev => [...prev, botMsg]);
             setIsTyping(false);
         }, 600);
-    };
+    }, []);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') sendMessage(inputText);

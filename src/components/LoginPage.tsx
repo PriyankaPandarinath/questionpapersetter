@@ -17,7 +17,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
     useEffect(() => {
         // Initialize with default admin user if no users exist
-        const storedUsers = JSON.parse(localStorage.getItem('facultyUsers') || '[]');
+        const storedUsers = JSON.parse(localStorage.getItem('facultyUsers') || '[]') as User[];
         if (storedUsers.length === 0) {
             storedUsers.push({ username: 'faculty', password: 'password123' });
             storedUsers.push({ username: 'admin', password: 'adminpassword' });
@@ -47,7 +47,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             return;
         }
 
-        const storedUsers = JSON.parse(localStorage.getItem('facultyUsers') || '[]');
+        const storedUsers = JSON.parse(localStorage.getItem('facultyUsers') || '[]') as User[];
         const validUser = storedUsers.find((u: User) => u.username === username && u.password === password);
 
         if (validUser) {
